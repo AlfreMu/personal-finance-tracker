@@ -1,9 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { MonthSelector } from "@/components/month-selector";
 import { MovementRow } from "@/components/movement-row";
+import {
+  cancelInstallmentPurchaseAction,
+  deactivateRecurringRuleAction,
+  deleteFinanceEntry,
+  updateFinanceEntry,
+} from "@/lib/finance/actions";
 import type { FinanceCatalogs, FinanceMovement } from "@/lib/finance/types";
 
 const quickFilters = [
@@ -23,6 +30,8 @@ type MovimientosClientProps = {
 };
 
 export function MovimientosClient({ initialQuickFilter, selectedMonth, movements, catalogs }: MovimientosClientProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [quick, setQuick] = useState(initialQuickFilter);
   const [search, setSearch] = useState("");
   const [type, setType] = useState("todos");
@@ -32,6 +41,10 @@ export function MovimientosClient({ initialQuickFilter, selectedMonth, movements
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [editing, setEditing] = useState<FinanceMovement | null>(null);
+  const [deleting, setDeleting] = useState<FinanceMovement | null>(null);
+  const [canceling, setCanceling] = useState<FinanceMovement | null>(null);
+  const [error, setError] = useState<string>();
 
   const filtered = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -73,6 +86,70 @@ export function MovimientosClient({ initialQuickFilter, selectedMonth, movements
     setPayment("todos");
     setMinAmount("");
     setMaxAmount("");
+  }
+
+  function toast(message: string) {
+    window.dispatchEvent(new CustomEvent("finance-toast", { detail: { message } }));
+  }
+
+  function closeDialogs() {
+    setEditing(null);
+    setDeleting(null);
+    setCanceling(null);
+    setError(undefined);
+  }
+
+  function submitEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing) return;
+    const formData = new FormData(event.currentTarget);
+    formData.set("sourceKind", editing.source.kind);
+    formData.set("sourceId", editing.source.id);
+    startTransition(async () => {
+      const result = await updateFinanceEntry(formData);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      toast(result.message);
+      closeDialogs();
+      router.refresh();
+    });
+  }
+
+  function submitDelete() {
+    if (!deleting) return;
+    const formData = new FormData();
+    formData.set("sourceKind", deleting.source.kind);
+    formData.set("sourceId", deleting.source.id);
+    startTransition(async () => {
+      const result = await deleteFinanceEntry(formData);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      toast(result.message);
+      closeDialogs();
+      router.refresh();
+    });
+  }
+
+  function submitCancelSeries() {
+    if (!canceling?.source.parentId) return;
+    const formData = new FormData();
+    formData.set("parentId", canceling.source.parentId);
+    formData.set("fromMonth", canceling.date.slice(0, 7));
+    startTransition(async () => {
+      const action = canceling.source.kind === "installment" ? cancelInstallmentPurchaseAction : deactivateRecurringRuleAction;
+      const result = await action(formData);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      toast(result.message);
+      closeDialogs();
+      router.refresh();
+    });
   }
 
   return (
@@ -140,7 +217,24 @@ export function MovimientosClient({ initialQuickFilter, selectedMonth, movements
 
       <section className="space-y-3" aria-label="Resultados de movimientos">
         {filtered.length > 0 ? (
-          filtered.map((movement) => <MovementRow key={movement.id} movement={movement} />)
+          filtered.map((movement) => (
+            <MovementRow
+              key={`${movement.source.kind}-${movement.id}`}
+              movement={movement}
+              onEdit={(item) => {
+                setError(undefined);
+                setEditing(item);
+              }}
+              onDelete={(item) => {
+                setError(undefined);
+                setDeleting(item);
+              }}
+              onCancelSeries={(item) => {
+                setError(undefined);
+                setCanceling(item);
+              }}
+            />
+          ))
         ) : (
           <EmptyState
             title="No hay movimientos para estos filtros"
@@ -157,7 +251,220 @@ export function MovimientosClient({ initialQuickFilter, selectedMonth, movements
           />
         )}
       </section>
+
+      {editing ? (
+        <EditDialog
+          movement={editing}
+          catalogs={catalogs}
+          error={error}
+          pending={isPending}
+          onClose={closeDialogs}
+          onSubmit={submitEdit}
+        />
+      ) : null}
+
+      {deleting ? (
+        <ConfirmDialog
+          title="Eliminar movimiento"
+          description={`Vas a eliminar "${deleting.description}". Esta accion no se puede deshacer.`}
+          actionLabel="Eliminar"
+          pending={isPending}
+          error={error}
+          onClose={closeDialogs}
+          onConfirm={submitDelete}
+        />
+      ) : null}
+
+      {canceling ? (
+        <ConfirmDialog
+          title={canceling.source.kind === "installment" ? "Cancelar compra" : "Desactivar recurrencia"}
+          description={
+            canceling.source.kind === "installment"
+              ? "Se conservaran las cuotas confirmadas y se cancelaran las futuras."
+              : "Se conservara el historial y se cancelaran las instancias futuras."
+          }
+          actionLabel={canceling.source.kind === "installment" ? "Cancelar compra" : "Desactivar"}
+          pending={isPending}
+          error={error}
+          onClose={closeDialogs}
+          onConfirm={submitCancelSeries}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function EditDialog({
+  movement,
+  catalogs,
+  error,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  movement: FinanceMovement;
+  catalogs: FinanceCatalogs;
+  error?: string;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const isPeriodSource = movement.source.kind === "installment" || movement.source.kind === "recurring";
+  return (
+    <div className="fixed inset-0 z-50">
+      <button type="button" className="absolute inset-0 bg-stone-950/45" onClick={onClose} aria-label="Cerrar edicion" />
+      <form
+        onSubmit={onSubmit}
+        className="absolute bottom-0 right-0 flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-stone-50 shadow-2xl md:bottom-auto md:top-0 md:h-full md:max-w-xl md:rounded-none"
+      >
+        <div className="border-b border-stone-200 bg-white px-5 py-4">
+          <p className="text-sm font-medium text-emerald-700">Editar registro</p>
+          <h2 className="text-xl font-semibold text-stone-950">Editar movimiento</h2>
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+          {!(isPeriodSource && movement.status !== "confirmed") ? <input type="hidden" name="scope" defaultValue="single" /> : null}
+          {isPeriodSource ? (
+            <Field label="Mes" name="date" defaultValue={movement.date.slice(0, 7)} type="month" />
+          ) : (
+            <Field label="Fecha" name="date" defaultValue={movement.date} type="date" />
+          )}
+          <Field label="Descripcion" name="description" defaultValue={movement.description} />
+          <Field label="Importe" name="amount" defaultValue={String(movement.amount)} type="number" step="0.01" />
+
+          {movement.type === "expense" ? (
+            <>
+              <Select name="categoryId" label="Categoria" defaultValue={movement.categoryId ?? ""} options={[{ id: "", name: "Sin categoria" }, ...catalogs.categories]} />
+              <Select name="paymentMethodId" label="Medio de pago" defaultValue={movement.paymentMethodId ?? ""} options={[{ id: "", name: "Sin medio" }, ...catalogs.paymentMethods]} />
+            </>
+          ) : null}
+
+          {movement.type === "income" ? (
+            <Select name="incomeSourceId" label="Fuente" defaultValue={movement.incomeSourceId ?? ""} options={[{ id: "", name: "Sin fuente" }, ...catalogs.incomeSources]} />
+          ) : null}
+
+          {(movement.source.kind === "installment" || movement.source.kind === "recurring") && movement.status !== "confirmed" ? (
+            <label className="block text-sm font-medium text-stone-700">
+              Alcance
+              <select name="scope" className="mt-1 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm text-stone-950">
+                <option value="single">Solo esta</option>
+                <option value="following">Esta y las siguientes</option>
+              </select>
+            </label>
+          ) : null}
+
+          <label className="block text-sm font-medium text-stone-700">
+            Nota
+            <textarea
+              name="note"
+              defaultValue={movement.note ?? ""}
+              rows={3}
+              className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base text-stone-950 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+            />
+          </label>
+
+          {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p> : null}
+        </div>
+        <div className="flex gap-3 border-t border-stone-200 bg-white p-5">
+          <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-full border border-stone-300 px-4 text-sm font-semibold text-stone-700">
+            Cancelar
+          </button>
+          <button type="submit" disabled={pending} className="min-h-11 flex-1 rounded-full bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60">
+            {pending ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  description,
+  actionLabel,
+  pending,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  description: string;
+  actionLabel: string;
+  pending: boolean;
+  error?: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <button type="button" className="absolute inset-0 bg-stone-950/45" onClick={onClose} aria-label="Cerrar confirmacion" />
+      <div className="relative w-full max-w-md rounded-lg bg-white p-5 shadow-2xl">
+        <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-stone-600">{description}</p>
+        {error ? <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p> : null}
+        <div className="mt-5 flex gap-3">
+          <button type="button" onClick={onClose} className="min-h-11 flex-1 rounded-full border border-stone-300 px-4 text-sm font-semibold text-stone-700">
+            Volver
+          </button>
+          <button type="button" disabled={pending} onClick={onConfirm} className="min-h-11 flex-1 rounded-full bg-red-700 px-4 text-sm font-semibold text-white disabled:opacity-60">
+            {pending ? "Procesando..." : actionLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  name,
+  defaultValue,
+  type = "text",
+  step,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  type?: string;
+  step?: string;
+}) {
+  return (
+    <label className="block text-sm font-medium text-stone-700">
+      {label}
+      <input
+        name={name}
+        defaultValue={defaultValue}
+        type={type}
+        step={step}
+        min={type === "number" ? "0" : undefined}
+        required={name !== "note"}
+        className="mt-1 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-base text-stone-950 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+      />
+    </label>
+  );
+}
+
+function Select({
+  label,
+  name,
+  defaultValue,
+  options,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  options: { id: string; name: string }[];
+}) {
+  return (
+    <label className="block text-sm font-medium text-stone-700">
+      {label}
+      <select name={name} defaultValue={defaultValue} className="mt-1 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-base text-stone-950">
+        {options.map((option) => (
+          <option key={option.id || "empty"} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

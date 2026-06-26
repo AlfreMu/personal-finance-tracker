@@ -1,8 +1,13 @@
+"use client";
+
 import type { FinanceMovement } from "@/lib/finance/types";
 import { formatARS, formatDate } from "@/lib/formatters";
 
 type MovementRowProps = {
   movement: FinanceMovement;
+  onEdit?: (movement: FinanceMovement) => void;
+  onDelete?: (movement: FinanceMovement) => void;
+  onCancelSeries?: (movement: FinanceMovement) => void;
 };
 
 const typeLabels: Record<FinanceMovement["type"], string> = {
@@ -23,7 +28,7 @@ const natureLabels: Record<FinanceMovement["nature"], string> = {
   other: "Otro",
 };
 
-export function MovementRow({ movement }: MovementRowProps) {
+export function MovementRow({ movement, onEdit, onDelete, onCancelSeries }: MovementRowProps) {
   const isIncome = movement.type === "income";
   const isSaving = movement.type === "saving";
   const amountPrefix = isIncome ? "+" : "-";
@@ -58,6 +63,37 @@ export function MovementRow({ movement }: MovementRowProps) {
           {amountPrefix}
           {formatARS(movement.amount)}
         </span>
+        {onEdit || onDelete || onCancelSeries ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            {movement.source.canEdit && onEdit ? (
+              <button
+                type="button"
+                onClick={() => onEdit(movement)}
+                className="min-h-9 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-700 transition hover:bg-stone-100"
+              >
+                Editar
+              </button>
+            ) : null}
+            {movement.source.canDelete && onDelete ? (
+              <button
+                type="button"
+                onClick={() => onDelete(movement)}
+                className="min-h-9 rounded-full border border-red-200 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+              >
+                Eliminar
+              </button>
+            ) : null}
+            {movement.source.canCancelSeries && onCancelSeries ? (
+              <button
+                type="button"
+                onClick={() => onCancelSeries(movement)}
+                className="min-h-9 rounded-full border border-amber-200 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-50"
+              >
+                {movement.source.kind === "installment" ? "Cancelar compra" : "Desactivar"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </article>
   );

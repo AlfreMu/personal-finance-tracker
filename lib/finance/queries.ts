@@ -22,6 +22,8 @@ type RawMovement = {
   description: string;
   category_id: string | null;
   payment_method_id: string | null;
+  income_source_id: string | null;
+  note: string | null;
 };
 
 type InvestmentMovementRow = {
@@ -31,16 +33,22 @@ type InvestmentMovementRow = {
   fund_id: string | null;
   from_fund_id: string | null;
   to_fund_id: string | null;
+  movement_id: string | null;
   usd_amount: number | null;
   ars_amount: number | null;
+  exchange_rate: number | null;
   status: string;
+  note: string | null;
 };
 
 type RecurringCommitmentRow = {
   id: string;
   period_month: string;
   planned_amount: number;
-  recurring_rules: { description: string } | { description: string }[] | null;
+  status?: string;
+  movement_id?: string | null;
+  recurring_rule_id?: string;
+  recurring_rules: { id?: string; description: string; category_id?: string | null; payment_method_id?: string | null; note?: string | null } | { id?: string; description: string; category_id?: string | null; payment_method_id?: string | null; note?: string | null }[] | null;
 };
 
 type InstallmentCommitmentRow = {
@@ -48,7 +56,10 @@ type InstallmentCommitmentRow = {
   period_month: string;
   installment_number: number;
   amount: number;
-  installment_purchases: { description: string; installment_count: number } | { description: string; installment_count: number }[] | null;
+  status?: string;
+  movement_id?: string | null;
+  installment_purchase_id?: string;
+  installment_purchases: { id?: string; description: string; category_id?: string | null; payment_method_id?: string | null; installment_count: number; note?: string | null } | { id?: string; description: string; category_id?: string | null; payment_method_id?: string | null; installment_count: number; note?: string | null }[] | null;
 };
 
 const emptySummary: MonthSummary = {
@@ -75,6 +86,8 @@ export async function getFinancePageData(monthParam?: string | null): Promise<Fi
     movementsResult,
     recurringResult,
     installmentsResult,
+    recurringSourcesResult,
+    installmentSourcesResult,
     investmentMovementsResult,
   ] = await Promise.all([
     supabase.from("categories").select("id,name,color,scope,sort_order").eq("is_active", true).order("sort_order"),
@@ -83,28 +96,40 @@ export async function getFinancePageData(monthParam?: string | null): Promise<Fi
     supabase.from("investment_funds").select("id,name,provider").eq("is_active", true).order("name"),
     supabase
       .from("movements")
-      .select("id,occurred_on,type,nature,status,amount,description,category_id,payment_method_id")
+      .select("id,occurred_on,type,nature,status,amount,description,category_id,payment_method_id,income_source_id,note")
       .gte("occurred_on", `${selectedMonth.slice(0, 4)}-01-01`)
       .lt("occurred_on", `${Number(selectedMonth.slice(0, 4)) + 1}-01-01`)
       .order("occurred_on", { ascending: false })
       .order("created_at", { ascending: false }),
     supabase
       .from("recurring_instances")
-      .select("id,period_month,planned_amount,status,recurring_rules(description)")
+      .select("id,period_month,planned_amount,status,movement_id,recurring_rule_id,recurring_rules(id,description,category_id,payment_method_id,note)")
       .gte("period_month", monthStart(selectedMonth))
       .lt("period_month", monthStart(addMonths(selectedMonth, 4)))
       .eq("status", "planned")
       .order("period_month"),
     supabase
       .from("installments")
-      .select("id,period_month,installment_number,amount,status,installment_purchases(description,installment_count)")
+      .select("id,period_month,installment_number,amount,status,movement_id,installment_purchase_id,installment_purchases(id,description,category_id,payment_method_id,installment_count,note)")
       .gte("period_month", monthStart(selectedMonth))
       .lt("period_month", monthStart(addMonths(selectedMonth, 4)))
       .eq("status", "planned")
       .order("period_month"),
     supabase
+      .from("recurring_instances")
+      .select("id,period_month,planned_amount,status,movement_id,recurring_rule_id,recurring_rules(id,description,category_id,payment_method_id,note)")
+      .gte("period_month", `${selectedMonth.slice(0, 4)}-01-01`)
+      .lt("period_month", `${Number(selectedMonth.slice(0, 4)) + 1}-01-01`)
+      .order("period_month"),
+    supabase
+      .from("installments")
+      .select("id,period_month,installment_number,amount,status,movement_id,installment_purchase_id,installment_purchases(id,description,category_id,payment_method_id,installment_count,note)")
+      .gte("period_month", `${selectedMonth.slice(0, 4)}-01-01`)
+      .lt("period_month", `${Number(selectedMonth.slice(0, 4)) + 1}-01-01`)
+      .order("period_month"),
+    supabase
       .from("investment_movements")
-      .select("id,occurred_on,type,fund_id,from_fund_id,to_fund_id,usd_amount,ars_amount,status")
+      .select("id,occurred_on,type,fund_id,from_fund_id,to_fund_id,movement_id,usd_amount,ars_amount,exchange_rate,status,note")
       .order("occurred_on", { ascending: false })
       .limit(1000),
   ]);
@@ -117,6 +142,8 @@ export async function getFinancePageData(monthParam?: string | null): Promise<Fi
     movementsResult,
     recurringResult,
     installmentsResult,
+    recurringSourcesResult,
+    installmentSourcesResult,
     investmentMovementsResult,
   ]) {
     if (result.error) throw new Error(result.error.message);
@@ -128,10 +155,31 @@ export async function getFinancePageData(monthParam?: string | null): Promise<Fi
   const categoryById = new Map(categories.map((item) => [item.id, item]));
   const paymentById = new Map(paymentMethods.map((item) => [item.id, item]));
   const fundById = new Map(funds.map((item) => [item.id, item.name]));
+  const recurringSources = (recurringSourcesResult.data ?? []) as unknown as RecurringCommitmentRow[];
+  const installmentSources = (installmentSourcesResult.data ?? []) as unknown as InstallmentCommitmentRow[];
+  const investmentSources = (investmentMovementsResult.data ?? []) as InvestmentMovementRow[];
+  const recurringByMovementId = new Map(recurringSources.filter((item) => item.movement_id).map((item) => [item.movement_id as string, item]));
+  const installmentByMovementId = new Map(installmentSources.filter((item) => item.movement_id).map((item) => [item.movement_id as string, item]));
+  const investmentByMovementId = new Map(investmentSources.filter((item) => item.movement_id).map((item) => [item.movement_id as string, item]));
   const allMovements = ((movementsResult.data ?? []) as RawMovement[]).map((movement) =>
-    mapMovement(movement, categoryById, paymentById),
+    mapMovement(movement, categoryById, paymentById, {
+      recurring: recurringByMovementId.get(movement.id),
+      installment: installmentByMovementId.get(movement.id),
+      investment: investmentByMovementId.get(movement.id),
+    }),
   );
-  const movements = allMovements.filter((movement) => movement.date >= monthStart(selectedMonth) && movement.date < monthAfter(selectedMonth));
+  const plannedRows = [
+    ...installmentSources
+      .filter((item) => !item.movement_id && item.status === "planned" && String(item.period_month).slice(0, 7) === selectedMonth)
+      .map((item) => mapPlannedInstallment(item, categoryById, paymentById)),
+    ...recurringSources
+      .filter((item) => !item.movement_id && item.status === "planned" && String(item.period_month).slice(0, 7) === selectedMonth)
+      .map((item) => mapPlannedRecurring(item, categoryById, paymentById)),
+  ];
+  const movements = [
+    ...allMovements.filter((movement) => movement.date >= monthStart(selectedMonth) && movement.date < monthAfter(selectedMonth)),
+    ...plannedRows,
+  ].sort((a, b) => b.date.localeCompare(a.date));
   const previousMovements = allMovements.filter((movement) => movement.date >= monthStart(addMonths(selectedMonth, -1)) && movement.date < monthStart(selectedMonth));
 
   const summary = summarize(movements);
@@ -148,7 +196,7 @@ export async function getFinancePageData(monthParam?: string | null): Promise<Fi
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
   const annualEvolution = buildAnnualEvolution(allMovements, selectedMonth);
-  const portfolio = buildPortfolio((investmentMovementsResult.data ?? []) as InvestmentMovementRow[], fundById);
+  const portfolio = buildPortfolio(investmentSources, fundById);
 
   const catalogs: FinanceCatalogs = {
     categories: categories.map((item) => ({ id: item.id, name: item.name, color: item.color })),
@@ -176,7 +224,13 @@ function mapMovement(
   movement: RawMovement,
   categoryById: Map<string, { name: string }>,
   paymentById: Map<string, { name: string }>,
+  sources: {
+    recurring?: RecurringCommitmentRow;
+    installment?: InstallmentCommitmentRow;
+    investment?: InvestmentMovementRow;
+  },
 ): FinanceMovement {
+  const source = movementSource(movement, sources);
   return {
     id: movement.id,
     date: movement.occurred_on,
@@ -189,6 +243,125 @@ function mapMovement(
     categoryId: movement.category_id,
     paymentMethod: movement.payment_method_id ? paymentById.get(movement.payment_method_id)?.name ?? "Sin medio" : "Sin medio",
     paymentMethodId: movement.payment_method_id,
+    incomeSourceId: movement.income_source_id,
+    note: movement.note,
+    source,
+  };
+}
+
+function movementSource(
+  movement: RawMovement,
+  sources: { recurring?: RecurringCommitmentRow; installment?: InstallmentCommitmentRow; investment?: InvestmentMovementRow },
+): FinanceMovement["source"] {
+  if (sources.installment) {
+    const purchase = one(sources.installment.installment_purchases);
+    return {
+      kind: "installment",
+      id: sources.installment.id,
+      parentId: purchase?.id ?? sources.installment.installment_purchase_id,
+      status: sources.installment.status,
+      canEdit: true,
+      canDelete: false,
+      canCancelSeries: true,
+      scopeLabel: sources.installment.status === "confirmed" ? "Solo esta cuota confirmada" : "Esta cuota o futuras",
+    };
+  }
+  if (sources.recurring) {
+    const rule = one(sources.recurring.recurring_rules);
+    return {
+      kind: "recurring",
+      id: sources.recurring.id,
+      parentId: rule?.id ?? sources.recurring.recurring_rule_id,
+      status: sources.recurring.status,
+      canEdit: true,
+      canDelete: false,
+      canCancelSeries: true,
+      scopeLabel: sources.recurring.status === "confirmed" ? "Solo esta instancia confirmada" : "Esta instancia o futuras",
+    };
+  }
+  if (sources.investment) {
+    return {
+      kind: "investment",
+      id: sources.investment.id,
+      status: sources.investment.status,
+      canEdit: true,
+      canDelete: true,
+    };
+  }
+  return { kind: "simple", id: movement.id, status: movement.status, canEdit: true, canDelete: true };
+}
+
+function one<T>(value: T | T[] | null | undefined): T | undefined {
+  return Array.isArray(value) ? value[0] : value ?? undefined;
+}
+
+function mapPlannedInstallment(
+  row: InstallmentCommitmentRow,
+  categoryById: Map<string, { name: string }>,
+  paymentById: Map<string, { name: string }>,
+): FinanceMovement {
+  const purchase = one(row.installment_purchases);
+  const categoryId = purchase?.category_id ?? null;
+  const paymentMethodId = purchase?.payment_method_id ?? null;
+  return {
+    id: row.id,
+    date: row.period_month,
+    type: "expense",
+    nature: "installment",
+    status: "planned",
+    amount: Number(row.amount),
+    description: `${purchase?.description ?? "Compra en cuotas"} - cuota ${row.installment_number} de ${purchase?.installment_count ?? "?"}`,
+    category: categoryId ? categoryById.get(categoryId)?.name ?? "Sin categoria" : "Sin categoria",
+    categoryId,
+    paymentMethod: paymentMethodId ? paymentById.get(paymentMethodId)?.name ?? "Sin medio" : "Sin medio",
+    paymentMethodId,
+    incomeSourceId: null,
+    note: purchase?.note ?? null,
+    source: {
+      kind: "installment",
+      id: row.id,
+      parentId: purchase?.id ?? row.installment_purchase_id,
+      status: row.status,
+      canEdit: true,
+      canDelete: false,
+      canCancelSeries: true,
+      scopeLabel: "Esta cuota o futuras",
+    },
+  };
+}
+
+function mapPlannedRecurring(
+  row: RecurringCommitmentRow,
+  categoryById: Map<string, { name: string }>,
+  paymentById: Map<string, { name: string }>,
+): FinanceMovement {
+  const rule = one(row.recurring_rules);
+  const categoryId = rule?.category_id ?? null;
+  const paymentMethodId = rule?.payment_method_id ?? null;
+  return {
+    id: row.id,
+    date: row.period_month,
+    type: "expense",
+    nature: "recurring_fixed",
+    status: "planned",
+    amount: Number(row.planned_amount),
+    description: rule?.description ?? "Gasto fijo",
+    category: categoryId ? categoryById.get(categoryId)?.name ?? "Sin categoria" : "Sin categoria",
+    categoryId,
+    paymentMethod: paymentMethodId ? paymentById.get(paymentMethodId)?.name ?? "Sin medio" : "Sin medio",
+    paymentMethodId,
+    incomeSourceId: null,
+    note: rule?.note ?? null,
+    source: {
+      kind: "recurring",
+      id: row.id,
+      parentId: rule?.id ?? row.recurring_rule_id,
+      status: row.status,
+      canEdit: true,
+      canDelete: false,
+      canCancelSeries: true,
+      scopeLabel: "Esta instancia o futuras",
+    },
   };
 }
 
@@ -265,11 +438,16 @@ function buildPortfolio(rows: InvestmentMovementRow[], fundById: Map<string, str
     id: row.id,
     date: row.occurred_on,
     type: row.type,
+    fundId: row.fund_id,
+    fromFundId: row.from_fund_id,
+    toFundId: row.to_fund_id,
     fund: row.type === "fund_transfer"
       ? `${fundById.get(row.from_fund_id ?? "") ?? "Origen"} -> ${fundById.get(row.to_fund_id ?? "") ?? "Destino"}`
       : fundById.get(row.fund_id ?? "") ?? "Fondo sin nombre",
     usdAmount: Number(row.usd_amount ?? 0),
     arsAmount: Number(row.ars_amount ?? 0),
+    exchangeRate: row.exchange_rate === null ? null : Number(row.exchange_rate),
+    note: row.note,
   }));
 
   return {

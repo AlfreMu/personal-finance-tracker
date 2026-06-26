@@ -1,6 +1,7 @@
 import { StatBar } from "@/components/stat-bar";
 import { getFinancePageData } from "@/lib/finance/queries";
 import { formatARS, formatDate, formatUSD } from "@/lib/formatters";
+import { InvestmentActions } from "./investment-actions";
 
 const savingsTypeLabels: Record<string, string> = {
   opening_balance: "Saldo inicial",
@@ -77,6 +78,7 @@ export default async function AhorrosPage() {
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-stone-500">{formatDate(movement.date)}</p>
+                  <InvestmentActions movement={movement} catalogs={data.catalogs} />
                 </div>
               ))
             ) : (

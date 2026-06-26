@@ -24,6 +24,18 @@ export type FinanceMovement = {
   categoryId: string | null;
   paymentMethod: string;
   paymentMethodId: string | null;
+  incomeSourceId: string | null;
+  note: string | null;
+  source: {
+    kind: "simple" | "installment" | "recurring" | "investment";
+    id: string;
+    parentId?: string;
+    status?: string;
+    scopeLabel?: string;
+    canEdit: boolean;
+    canDelete: boolean;
+    canCancelSeries?: boolean;
+  };
 };
 
 export type MonthSummary = {
@@ -68,9 +80,14 @@ export type PortfolioMovement = {
   id: string;
   date: string;
   type: string;
+  fundId: string | null;
+  fromFundId: string | null;
+  toFundId: string | null;
   fund: string;
   usdAmount: number;
   arsAmount: number;
+  exchangeRate: number | null;
+  note: string | null;
 };
 
 export type PortfolioSummary = {

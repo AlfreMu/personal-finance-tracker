@@ -69,6 +69,7 @@ export type Database = {
     Functions: {
       bootstrap_current_user_defaults: { Args: never; Returns: undefined };
       bootstrap_user_defaults: { Args: { target_user_id: string }; Returns: undefined };
+      cancel_installment_purchase_from: { Args: { p_installment_purchase_id: string }; Returns: undefined };
       create_installment_purchase: {
         Args: {
           p_description: string;
@@ -111,6 +112,63 @@ export type Database = {
           p_note: string | null;
         };
         Returns: string;
+      };
+      deactivate_recurring_rule_from: { Args: { p_recurring_rule_id: string; p_from_month: string }; Returns: undefined };
+      delete_investment_activity: { Args: { p_investment_movement_id: string }; Returns: undefined };
+      delete_simple_movement: { Args: { p_movement_id: string }; Returns: undefined };
+      update_installment_instance: {
+        Args: {
+          p_installment_id: string;
+          p_scope: string;
+          p_period_month: string;
+          p_amount: number;
+          p_description: string;
+          p_category_id: string | null;
+          p_payment_method_id: string | null;
+          p_note: string | null;
+        };
+        Returns: undefined;
+      };
+      update_investment_activity: {
+        Args: {
+          p_investment_movement_id: string;
+          p_occurred_on: string;
+          p_type: string;
+          p_fund_id: string | null;
+          p_from_fund_id: string | null;
+          p_to_fund_id: string | null;
+          p_usd_amount: number;
+          p_ars_amount: number | null;
+          p_exchange_rate: number | null;
+          p_note: string | null;
+        };
+        Returns: undefined;
+      };
+      update_recurring_instance: {
+        Args: {
+          p_recurring_instance_id: string;
+          p_scope: string;
+          p_period_month: string;
+          p_amount: number;
+          p_description: string;
+          p_category_id: string | null;
+          p_payment_method_id: string | null;
+          p_note: string | null;
+        };
+        Returns: undefined;
+      };
+      update_simple_movement: {
+        Args: {
+          p_movement_id: string;
+          p_occurred_on: string;
+          p_amount: number;
+          p_description: string;
+          p_category_id: string | null;
+          p_payment_method_id: string | null;
+          p_income_source_id: string | null;
+          p_note: string | null;
+        };
+        Returns: undefined;
       };
     };
     Enums: { [_ in never]: never };
