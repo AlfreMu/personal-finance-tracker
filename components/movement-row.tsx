@@ -1,29 +1,31 @@
-import type { Movement } from "@/lib/mock-data";
+import type { FinanceMovement } from "@/lib/finance/types";
 import { formatARS, formatDate } from "@/lib/formatters";
 
 type MovementRowProps = {
-  movement: Movement;
+  movement: FinanceMovement;
 };
 
-const typeLabels: Record<Movement["type"], string> = {
-  ingreso: "Ingreso",
-  gasto: "Gasto",
-  ahorro: "Ahorro",
-  transferencia: "Transferencia",
+const typeLabels: Record<FinanceMovement["type"], string> = {
+  income: "Ingreso",
+  expense: "Gasto",
+  saving: "Ahorro",
+  transfer: "Transferencia",
+  adjustment: "Ajuste",
+  informational: "Informativo",
 };
 
-const natureLabels: Record<Movement["nature"], string> = {
+const natureLabels: Record<FinanceMovement["nature"], string> = {
   variable: "Variable",
-  fijo: "Fijo",
-  cuota: "Cuota",
-  ingreso: "Ingreso",
-  ahorro: "Ahorro",
-  otro: "Otro",
+  recurring_fixed: "Fijo",
+  installment: "Cuota",
+  investment: "Ahorro",
+  internal_transfer: "Transferencia interna",
+  other: "Otro",
 };
 
 export function MovementRow({ movement }: MovementRowProps) {
-  const isIncome = movement.type === "ingreso";
-  const isSaving = movement.type === "ahorro";
+  const isIncome = movement.type === "income";
+  const isSaving = movement.type === "saving";
   const amountPrefix = isIncome ? "+" : "-";
 
   return (
@@ -31,7 +33,7 @@ export function MovementRow({ movement }: MovementRowProps) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold text-stone-950">{movement.description}</h3>
-          {movement.status !== "confirmado" ? (
+          {movement.status !== "confirmed" ? (
             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
               Planificado
             </span>

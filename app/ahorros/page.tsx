@@ -1,22 +1,19 @@
-"use client";
-
 import { StatBar } from "@/components/stat-bar";
+import { getFinancePageData } from "@/lib/finance/queries";
 import { formatARS, formatDate, formatUSD } from "@/lib/formatters";
-import { getPortfolioSummary, usePrototypeStore } from "@/lib/prototype-store";
-import type { SavingsMovementType } from "@/lib/mock-data";
 
-const savingsTypeLabels: Record<SavingsMovementType, string> = {
-  saldo_inicial: "Saldo inicial",
-  aporte: "Aporte",
-  retiro: "Retiro",
-  transferencia: "Transferencia",
-  ajuste_valuacion: "Ajuste de valuacion",
+const savingsTypeLabels: Record<string, string> = {
+  opening_balance: "Saldo inicial",
+  usd_purchase: "Compra USD",
+  fund_contribution: "Aporte",
+  withdrawal: "Retiro",
+  fund_transfer: "Transferencia",
+  valuation_adjustment: "Ajuste de valuacion",
 };
 
-export default function AhorrosPage() {
-  const { state } = usePrototypeStore();
-  const portfolio = getPortfolioSummary(state);
-  const recentMovements = state.savingsMovements.slice(0, 6);
+export default async function AhorrosPage() {
+  const data = await getFinancePageData();
+  const portfolio = data.portfolio;
 
   return (
     <div className="space-y-5">
@@ -50,7 +47,7 @@ export default function AhorrosPage() {
             {portfolio.funds.length > 0 ? (
               portfolio.funds.map((fund, index) => (
                 <StatBar
-                  key={fund.name}
+                  key={fund.id}
                   label={fund.name}
                   value={formatUSD(fund.amount)}
                   percent={portfolio.total > 0 ? (fund.amount / portfolio.total) * 100 : 0}
@@ -58,9 +55,7 @@ export default function AhorrosPage() {
                 />
               ))
             ) : (
-              <p className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
-                No hay fondos cargados.
-              </p>
+              <p className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">No hay fondos cargados.</p>
             )}
           </div>
         </div>
@@ -68,25 +63,25 @@ export default function AhorrosPage() {
         <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold text-stone-950">Ultimos movimientos</h2>
           <div className="mt-4 space-y-3">
-            {recentMovements.map((movement) => (
-              <div key={movement.id} className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-stone-950">
-                      {savingsTypeLabels[movement.type]}
-                    </p>
-                    <p className="mt-1 text-sm text-stone-600">{movement.fund}</p>
+            {portfolio.recentMovements.length > 0 ? (
+              portfolio.recentMovements.map((movement) => (
+                <div key={movement.id} className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-950">{savingsTypeLabels[movement.type] ?? movement.type}</p>
+                      <p className="mt-1 text-sm text-stone-600">{movement.fund}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold tabular-nums text-stone-950">{formatUSD(movement.usdAmount)}</p>
+                      {movement.arsAmount > 0 ? <p className="mt-1 text-xs tabular-nums text-stone-600">{formatARS(movement.arsAmount)}</p> : null}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold tabular-nums text-stone-950">{formatUSD(movement.usdAmount)}</p>
-                    {movement.arsAmount > 0 ? (
-                      <p className="mt-1 text-xs tabular-nums text-stone-600">{formatARS(movement.arsAmount)}</p>
-                    ) : null}
-                  </div>
+                  <p className="mt-2 text-xs text-stone-500">{formatDate(movement.date)}</p>
                 </div>
-                <p className="mt-2 text-xs text-stone-500">{formatDate(movement.date)}</p>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">No hay movimientos de ahorro cargados.</p>
+            )}
           </div>
         </div>
       </section>

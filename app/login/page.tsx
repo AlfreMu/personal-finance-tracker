@@ -11,11 +11,11 @@ export default function LoginPage() {
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-stone-950">Iniciar sesion</h1>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          Entrá para ver el prototipo protegido. Los datos financieros siguen en modo demostración.
+          Entra para ver tus datos protegidos y persistidos en Supabase.
         </p>
         <AuthForm action={signInAction} submitLabel="Ingresar" />
         <p className="mt-6 text-sm text-stone-600">
-          ¿No tenés cuenta?{" "}
+          No tenes cuenta?{" "}
           <Link className="font-semibold text-emerald-700 hover:text-emerald-900" href="/registro">
             Crear una
           </Link>

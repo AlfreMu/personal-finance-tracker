@@ -47,8 +47,8 @@ export type Database = {
         id: string; user_id: string; name: string; currency: string; provider: string | null; is_active: boolean; created_at: string; updated_at: string;
       }, Insert<{ user_id: string; name: string; currency: string }, { id: string; provider: string | null; is_active: boolean; created_at: string; updated_at: string }>>;
       investment_movements: T<{
-        id: string; user_id: string; occurred_on: string; type: string; fund_id: string | null; from_fund_id: string | null; to_fund_id: string | null; usd_amount: number | null; ars_amount: number | null; exchange_rate: number | null; status: string; note: string | null; created_at: string; updated_at: string;
-      }, Insert<{ user_id: string; occurred_on: string; type: string }, { id: string; fund_id: string | null; from_fund_id: string | null; to_fund_id: string | null; usd_amount: number | null; ars_amount: number | null; exchange_rate: number | null; status: string; note: string | null; created_at: string; updated_at: string }>>;
+        id: string; user_id: string; occurred_on: string; type: string; fund_id: string | null; from_fund_id: string | null; to_fund_id: string | null; movement_id: string | null; usd_amount: number | null; ars_amount: number | null; exchange_rate: number | null; status: string; note: string | null; created_at: string; updated_at: string;
+      }, Insert<{ user_id: string; occurred_on: string; type: string }, { id: string; fund_id: string | null; from_fund_id: string | null; to_fund_id: string | null; movement_id: string | null; usd_amount: number | null; ars_amount: number | null; exchange_rate: number | null; status: string; note: string | null; created_at: string; updated_at: string }>>;
       movements: T<{
         id: string; user_id: string; occurred_on: string; type: string; nature: string; status: string; amount: number; currency: string; description: string; category_id: string | null; payment_method_id: string | null; account_id: string | null; counterparty_account_id: string | null; income_source_id: string | null; note: string | null; import_id: string | null; created_at: string; updated_at: string;
       }, Insert<{ user_id: string; occurred_on: string; type: string; nature: string; amount: number; currency: string; description: string }, { id: string; status: string; category_id: string | null; payment_method_id: string | null; account_id: string | null; counterparty_account_id: string | null; income_source_id: string | null; note: string | null; import_id: string | null; created_at: string; updated_at: string }>>;
@@ -69,6 +69,49 @@ export type Database = {
     Functions: {
       bootstrap_current_user_defaults: { Args: never; Returns: undefined };
       bootstrap_user_defaults: { Args: { target_user_id: string }; Returns: undefined };
+      create_installment_purchase: {
+        Args: {
+          p_description: string;
+          p_category_id: string | null;
+          p_payment_method_id: string | null;
+          p_purchase_date: string;
+          p_first_period_month: string;
+          p_total_amount: number;
+          p_installment_amount: number;
+          p_installment_count: number;
+          p_first_installment_number: number;
+          p_currency: string;
+          p_note: string | null;
+        };
+        Returns: string;
+      };
+      create_investment_activity: {
+        Args: {
+          p_occurred_on: string;
+          p_type: string;
+          p_fund_id: string | null;
+          p_from_fund_id: string | null;
+          p_to_fund_id: string | null;
+          p_usd_amount: number;
+          p_ars_amount: number | null;
+          p_exchange_rate: number | null;
+          p_note: string | null;
+        };
+        Returns: string;
+      };
+      create_recurring_expense: {
+        Args: {
+          p_description: string;
+          p_category_id: string | null;
+          p_payment_method_id: string | null;
+          p_amount: number;
+          p_currency: string;
+          p_start_month: string;
+          p_end_month: string | null;
+          p_note: string | null;
+        };
+        Returns: string;
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

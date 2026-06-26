@@ -4,24 +4,16 @@ import { useState } from "react";
 import { MetricCard } from "@/components/metric-card";
 import { MonthSelector } from "@/components/month-selector";
 import { StatBar } from "@/components/stat-bar";
-import {
-  getAnnualEvolution,
-  getCategoryTotals,
-  getMonthSummary,
-  getPreviousMonthSummary,
-  getTopExpenses,
-  usePrototypeStore,
-} from "@/lib/prototype-store";
+import type { FinancePageData } from "@/lib/finance/types";
 import { formatARS, formatPercent } from "@/lib/formatters";
 
-export function EstadisticasClient() {
-  const { state } = usePrototypeStore();
+export function EstadisticasClient({ data }: { data: FinancePageData }) {
   const [tab, setTab] = useState<"mensual" | "anual">("mensual");
-  const summary = getMonthSummary(state);
-  const previousSummary = getPreviousMonthSummary(state);
-  const categoryTotals = getCategoryTotals(state);
-  const topExpenses = getTopExpenses(state);
-  const annualEvolution = getAnnualEvolution(state);
+  const summary = data.summary;
+  const previousSummary = data.previousSummary;
+  const categoryTotals = data.categoryTotals;
+  const topExpenses = data.topExpenses;
+  const annualEvolution = data.annualEvolution;
   const annualIncome = annualEvolution.reduce((sum, item) => sum + item.income, 0);
   const annualExpenses = annualEvolution.reduce((sum, item) => sum + item.expenses, 0);
   const annualSavings = annualEvolution.reduce((sum, item) => sum + item.savings, 0);
@@ -46,7 +38,7 @@ export function EstadisticasClient() {
             Proporciones, mayores gastos y evolucion para entender el comportamiento del mes.
           </p>
         </div>
-        <MonthSelector />
+        <MonthSelector selectedMonth={data.selectedMonth} />
       </header>
 
       <div className="inline-flex rounded-full border border-stone-200 bg-white p-1 shadow-sm">

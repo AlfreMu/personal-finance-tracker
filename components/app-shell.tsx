@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { signOutAction } from "@/app/auth-actions";
-import { PrototypeStoreProvider, usePrototypeStore } from "@/lib/prototype-store";
 import {
   IconChart,
   IconDollar,
@@ -29,25 +28,26 @@ const navItems = [
 ];
 
 export function AppShell({ children }: AppShellProps) {
-  return (
-    <PrototypeStoreProvider>
-      <AppShellContent>{children}</AppShellContent>
-    </PrototypeStoreProvider>
-  );
-}
-
-function AppShellContent({ children }: AppShellProps) {
   const pathname = usePathname();
-  const { state, dispatch } = usePrototypeStore();
+  const [toast, setToast] = useState<string>();
   const isPublicAuthRoute = pathname === "/login" || pathname === "/registro";
 
   useEffect(() => {
-    if (!state.toast) return;
+    function onToast(event: Event) {
+      const custom = event as CustomEvent<{ message?: string }>;
+      setToast(custom.detail?.message);
+    }
+    window.addEventListener("finance-toast", onToast);
+    return () => window.removeEventListener("finance-toast", onToast);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
     const timeout = window.setTimeout(() => {
-      dispatch({ type: "SET_TOAST", message: undefined });
+      setToast(undefined);
     }, 2400);
     return () => window.clearTimeout(timeout);
-  }, [dispatch, state.toast]);
+  }, [toast]);
 
   if (isPublicAuthRoute) {
     return <>{children}</>;
@@ -99,9 +99,6 @@ function AppShellContent({ children }: AppShellProps) {
 
       <main id="main-content" className="min-h-dvh pb-28 lg:pl-64 lg:pb-0">
         <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-          <p className="mb-4 rounded-full bg-white px-4 py-2 text-xs font-medium text-stone-600 shadow-sm ring-1 ring-stone-200">
-            Modo demostracion: los datos no se guardan al recargar.
-          </p>
           {children}
         </div>
       </main>
@@ -143,12 +140,12 @@ function AppShellContent({ children }: AppShellProps) {
 
       <AddMovementDrawer />
 
-      {state.toast ? (
+      {toast ? (
         <div
           className="fixed left-4 right-4 top-4 z-[70] mx-auto max-w-sm rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-900 shadow-lg"
           role="status"
         >
-          {state.toast}
+          {toast}
         </div>
       ) : null}
     </div>

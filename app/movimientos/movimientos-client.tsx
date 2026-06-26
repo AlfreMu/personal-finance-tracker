@@ -4,8 +4,7 @@ import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { MonthSelector } from "@/components/month-selector";
 import { MovementRow } from "@/components/movement-row";
-import { categories, paymentMethods } from "@/lib/mock-data";
-import { getMovementsForMonth, usePrototypeStore } from "@/lib/prototype-store";
+import type { FinanceCatalogs, FinanceMovement } from "@/lib/finance/types";
 
 const quickFilters = [
   { value: "todos", label: "Todos" },
@@ -18,10 +17,12 @@ const quickFilters = [
 
 type MovimientosClientProps = {
   initialQuickFilter: string;
+  selectedMonth: string;
+  movements: FinanceMovement[];
+  catalogs: FinanceCatalogs;
 };
 
-export function MovimientosClient({ initialQuickFilter }: MovimientosClientProps) {
-  const { state } = usePrototypeStore();
+export function MovimientosClient({ initialQuickFilter, selectedMonth, movements, catalogs }: MovimientosClientProps) {
   const [quick, setQuick] = useState(initialQuickFilter);
   const [search, setSearch] = useState("");
   const [type, setType] = useState("todos");
@@ -32,21 +33,19 @@ export function MovimientosClient({ initialQuickFilter }: MovimientosClientProps
   const [maxAmount, setMaxAmount] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const monthMovements = useMemo(() => getMovementsForMonth(state), [state]);
-
   const filtered = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     const min = Number(minAmount || 0);
     const max = Number(maxAmount || Number.MAX_SAFE_INTEGER);
 
-    return monthMovements.filter((movement) => {
+    return movements.filter((movement) => {
       const quickMatch =
         quick === "todos" ||
         (quick === "variables" && movement.nature === "variable") ||
-        (quick === "fijos" && movement.nature === "fijo") ||
-        (quick === "cuotas" && movement.nature === "cuota") ||
-        (quick === "ingresos" && movement.type === "ingreso") ||
-        (quick === "ahorros" && movement.type === "ahorro");
+        (quick === "fijos" && movement.nature === "recurring_fixed") ||
+        (quick === "cuotas" && movement.nature === "installment") ||
+        (quick === "ingresos" && movement.type === "income") ||
+        (quick === "ahorros" && movement.type === "saving");
       const textMatch =
         !normalizedSearch ||
         movement.description.toLowerCase().includes(normalizedSearch) ||
@@ -63,7 +62,7 @@ export function MovimientosClient({ initialQuickFilter }: MovimientosClientProps
         movement.amount <= max
       );
     });
-  }, [category, maxAmount, minAmount, monthMovements, nature, payment, quick, search, type]);
+  }, [category, maxAmount, minAmount, movements, nature, payment, quick, search, type]);
 
   function clearFilters() {
     setQuick("todos");
@@ -86,7 +85,7 @@ export function MovimientosClient({ initialQuickFilter }: MovimientosClientProps
             Busqueda y filtros para revisar ingresos, gastos, cuotas y ahorros del mes.
           </p>
         </div>
-        <MonthSelector />
+        <MonthSelector selectedMonth={selectedMonth} />
       </header>
 
       <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
@@ -129,10 +128,10 @@ export function MovimientosClient({ initialQuickFilter }: MovimientosClientProps
 
         {showFilters ? (
           <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <SelectFilter label="Tipo" value={type} onChange={setType} options={["todos", "ingreso", "gasto", "ahorro", "transferencia"]} />
-            <SelectFilter label="Naturaleza" value={nature} onChange={setNature} options={["todos", "variable", "fijo", "cuota", "ingreso", "ahorro", "otro"]} />
-            <SelectFilter label="Categoria" value={category} onChange={setCategory} options={["todos", ...categories, "Ingreso", "Ahorro USD"]} />
-            <SelectFilter label="Medio de pago" value={payment} onChange={setPayment} options={["todos", ...paymentMethods, "ICBC pesos"]} />
+            <SelectFilter label="Tipo" value={type} onChange={setType} options={["todos", "income", "expense", "saving", "transfer", "informational"]} />
+            <SelectFilter label="Naturaleza" value={nature} onChange={setNature} options={["todos", "variable", "recurring_fixed", "installment", "investment", "internal_transfer", "other"]} />
+            <SelectFilter label="Categoria" value={category} onChange={setCategory} options={["todos", ...catalogs.categories.map((item) => item.name), "Sin categoria"]} />
+            <SelectFilter label="Medio de pago" value={payment} onChange={setPayment} options={["todos", ...catalogs.paymentMethods.map((item) => item.name), "Sin medio"]} />
             <AmountFilter label="Desde" value={minAmount} onChange={setMinAmount} />
             <AmountFilter label="Hasta" value={maxAmount} onChange={setMaxAmount} />
           </div>
@@ -173,6 +172,20 @@ function SelectFilter({
   options: string[];
   onChange: (value: string) => void;
 }) {
+  const labels: Record<string, string> = {
+    todos: "Todos",
+    income: "Ingreso",
+    expense: "Gasto",
+    saving: "Ahorro",
+    transfer: "Transferencia",
+    informational: "Informativo",
+    recurring_fixed: "Fijo",
+    installment: "Cuota",
+    investment: "Ahorro",
+    internal_transfer: "Transferencia interna",
+    other: "Otro",
+  };
+
   return (
     <label className="block text-sm font-medium text-stone-700">
       {label}
@@ -183,7 +196,7 @@ function SelectFilter({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option === "todos" ? "Todos" : option}
+            {labels[option] ?? option}
           </option>
         ))}
       </select>
