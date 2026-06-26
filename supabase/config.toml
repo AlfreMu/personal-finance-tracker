@@ -1,0 +1,10 @@
+project_id = "personal-finance-tracker-dev"
+
+[api]
+enabled = true
+
+[auth]
+enabled = true
+
+[db]
+major_version = 17

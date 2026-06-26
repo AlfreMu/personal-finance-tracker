@@ -59,3 +59,12 @@ Before changing product behavior, read:
 - Supabase/PostgreSQL, Supabase Auth and Row Level Security are the MVP provider/security baseline once implementation reaches persistence.
 - Future Supabase tables with private data must have an owner field and Row Level Security.
 - `Gastos 2026!E16` is explicitly excluded from financial data and must not be imported or saved as `pending_review`.
+
+## Supabase persistence rules
+
+- Every schema change must be represented by a reviewed migration in `supabase/migrations/`.
+- RLS is mandatory on private tables, with explicit policies per operation.
+- Never expose or use `service_role` keys in application code.
+- Regenerate `lib/supabase/database.types.ts` after applying migrations.
+- Do not hand-edit generated database types except to replace them with regenerated output.
+- Do not import private financial data unless a later phase explicitly approves it.

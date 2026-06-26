@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { signOutAction } from "@/app/auth-actions";
 import { PrototypeStoreProvider, usePrototypeStore } from "@/lib/prototype-store";
 import {
   IconChart,
@@ -38,6 +39,7 @@ export function AppShell({ children }: AppShellProps) {
 function AppShellContent({ children }: AppShellProps) {
   const pathname = usePathname();
   const { state, dispatch } = usePrototypeStore();
+  const isPublicAuthRoute = pathname === "/login" || pathname === "/registro";
 
   useEffect(() => {
     if (!state.toast) return;
@@ -46,6 +48,10 @@ function AppShellContent({ children }: AppShellProps) {
     }, 2400);
     return () => window.clearTimeout(timeout);
   }, [dispatch, state.toast]);
+
+  if (isPublicAuthRoute) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-dvh bg-stone-50 text-stone-950">
@@ -80,6 +86,14 @@ function AppShellContent({ children }: AppShellProps) {
               );
             })}
           </nav>
+          <form action={signOutAction} className="mt-auto px-2">
+            <button
+              className="min-h-11 w-full rounded-lg border border-stone-200 px-3 text-left text-sm font-semibold text-stone-700 transition hover:bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+              type="submit"
+            >
+              Cerrar sesion
+            </button>
+          </form>
         </div>
       </aside>
 
@@ -117,6 +131,15 @@ function AppShellContent({ children }: AppShellProps) {
           })}
         </div>
       </nav>
+
+      <form action={signOutAction} className="fixed right-4 top-4 z-40 lg:hidden">
+        <button
+          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+          type="submit"
+        >
+          Cerrar sesion
+        </button>
+      </form>
 
       <AddMovementDrawer />
 
